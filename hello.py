@@ -1,4 +1,4 @@
-def hello(name):
+def hello(name="world"):
     print(f"hello,{name}")
 # B不喜欢这个函数并且进行了更改。
 if __name__=="__main__":
