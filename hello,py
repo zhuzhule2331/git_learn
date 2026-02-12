@@ -1,5 +1,5 @@
-def hello():
-    print("hello,world!")
-
+def hello(name):
+    print(f"hello,{name}")
+# B不喜欢这个函数并且进行了更改。
 if __name__=="__main__":
-    hello()
+    hello('yuyuzheng')
