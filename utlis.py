@@ -51,8 +51,9 @@ def get_installed_packages():
         return {}
 
 def get_message_from_ros():
-    a  =  3
-    return a
+    a  =  344
+    c = 5
+    return a+c
 
 # 调用并打印结果
 if __name__ == "__main__":
