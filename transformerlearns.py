@@ -77,75 +77,75 @@ class PositionalEncoding(nn.Module):
 
         return output
 
-    def scaled_dot_product_attition(
-            query:torch.Tensor,
-            key:torch.Tensor,
-            value:torch.Tensor,
-            mask:Optional[torch.Tensor]=None,
-            drop_out:Optional[nn.Dropout] = None
-    ) -> Tuple[torch.Tensor,torch.Tensor]:
-        """
-        缩放点积注意力机制：
-        公式：Attention(Q,K,V) =softmax(Q*k^T/sqrt(d_k))V
-            K^T:K的转职
-            d_k:K的维度
-        为么要进行注意力缩放？
-            -当d_k很大时，点积结果会很小
-            -导致softmax后的梯度很小，训练困难
-            -除以sqrt(d_k)可以解决这种问题
-        参数：
-            query:[batch_size,n_heads,seq_len,d_k] -查询矩阵
-            key:[batch_size,n_heads,seq_len,d_k]-键矩阵
-            value:[batch_size,n_heads,seq_len,d_v]- 值矩阵
-            mask:[batch_size,1,1,seq_len] or [batch_size,1,seq_len,seq_len] -掩码
-            drop_out:Drop_out层（可选）
-                n_heads：注意力头的个数
+def scaled_dot_product_attention(
+        query:torch.Tensor,
+        key:torch.Tensor,
+        value:torch.Tensor,
+        mask:Optional[torch.Tensor]=None,
+        drop_out:Optional[nn.Dropout] = None
+) -> Tuple[torch.Tensor,torch.Tensor]:
+    """
+    缩放点积注意力机制：
+    公式：Attention(Q,K,V) =softmax(Q*k^T/sqrt(d_k))V
+        K^T:K的转职
+        d_k:K的维度
+    为么要进行注意力缩放？
+        -当d_k很大时，点积结果会很小
+        -导致softmax后的梯度很小，训练困难
+        -除以sqrt(d_k)可以解决这种问题
+    参数：
+        query:[batch_size,n_heads,seq_len,d_k] -查询矩阵
+        key:[batch_size,n_heads,seq_len,d_k]-键矩阵
+        value:[batch_size,n_heads,seq_len,d_v]- 值矩阵
+        mask:[batch_size,1,1,seq_len] or [batch_size,1,seq_len,seq_len] -掩码
+        drop_out:Drop_out层（可选）
+            n_heads：注意力头的个数
 
-        返回：
-        output:[batch_size,n_heads,seq_len,d_v]-注意力输出
-        attention_weights:[batch_size,n_heads,seq_len,seq_len]-注意力权重
+    返回：
+    output:[batch_size,n_heads,seq_len,d_v]-注意力输出
+    attention_weights:[batch_size,n_heads,seq_len,seq_len]-注意力权重
 
-        数据流示例：
-          1.机器翻译 
-            场景：我爱北京->I love Beijing.
-            query:[32,8,10,64]#32个样本，8个头，10个词（token），每个词64维
-            key:[32,8,10,64]
-            value:[32,8,10,64]
+    数据流示例：
+        1.机器翻译 
+        场景：我爱北京->I love Beijing.
+        query:[32,8,10,64]#32个样本，8个头，10个词（token），每个词64维
+        key:[32,8,10,64]
+        value:[32,8,10,64]
 
-            步骤1：Q*K^T ->[32,8,10,10]  # 每个词对每个词的注意力分数(k^T是K的转置)
-                衡量每个 “查询（Q）” 和所有 “键（K）” 的匹配程度（分数越高，关联越强）
-                比如文本中：第 i 个词对第 j 个词的注意力分数
-            步骤2：缩放 ->[32,8,10,10]/sqrt(64) = [32,8,10,10]/8
-            步骤3：softmax -> [32,8,10,10] # 归一化为概率 把注意力分数转化为 “权重”（概率），表示对每个位置的关注程度
-            步骤4：乘以V->[32,8,10,64] # 加权求和得到输出  [32,8,10,10] × [32,8,10,64] → [32,8,10,64]	
-                   用注意力权重对 “值（V）” 加权，得到融合了全局关联信息的输出
-            
-        """
-        # 获取最后一个维度的大小
-        d_k = query.size(-1)
+        步骤1：Q*K^T ->[32,8,10,10]  # 每个词对每个词的注意力分数(k^T是K的转置)
+            衡量每个 “查询（Q）” 和所有 “键（K）” 的匹配程度（分数越高，关联越强）
+            比如文本中：第 i 个词对第 j 个词的注意力分数
+        步骤2：缩放 ->[32,8,10,10]/sqrt(64) = [32,8,10,10]/8
+        步骤3：softmax -> [32,8,10,10] # 归一化为概率 把注意力分数转化为 “权重”（概率），表示对每个位置的关注程度
+        步骤4：乘以V->[32,8,10,64] # 加权求和得到输出  [32,8,10,10] × [32,8,10,64] → [32,8,10,64]	
+                用注意力权重对 “值（V）” 加权，得到融合了全局关联信息的输出
+        
+    """
+    # 获取最后一个维度的大小
+    d_k = query.size(-1)
 
-        #步骤1：计算Q*K^T
-        # Q:[batch_size,n_heads，seq_len_q,d_k]
-        # K的转置:[batch_size,n_heads,d_k,seq_len_k]
-        # score:[batc_size,n_heads,seq_len_q,seq_len_k]
-        scores = torch.matmul(query,key.transpose(-2,-1))
-        #步骤2：缩放
-        scores = scores/math.sqrt(d_k)
-        #步骤3：如果有mask，应用mask（应用于masked Attention)
-        if mask is not None:
-            #mask为1的位置设为-inf,对应的softmax中的概率会变为0
-            scores = scores.masked_fill(mask == 0,1e-9)
-        #步骤4：Softmax归一化
-        attention_weights = F.softmax(scores,dim=-1)
-        #步骤5：如果有dropout 应用dropout
-        if drop_out is not None:
-            attention_weights =drop_out(attention_weights)
-        #步骤6：乘以V得到输出
-        # attentinon_weights:[batch_size,,n_heads,seq_len_q,seq_len_k]
-        # value:[batch_size,h_heads,seq_len_k,d_v]
-        # output:[batch_size,heads,seq_len_q,d_v]
-        output = torch.matmul(attention_weights,value)
-        return output
+    #步骤1：计算Q*K^T
+    # Q:[batch_size,n_heads，seq_len_q,d_k]
+    # K的转置:[batch_size,n_heads,d_k,seq_len_k]
+    # score:[batc_size,n_heads,seq_len_q,seq_len_k]
+    scores = torch.matmul(query,key.transpose(-2,-1))
+    #步骤2：缩放
+    scores = scores/math.sqrt(d_k)
+    #步骤3：如果有mask，应用mask（应用于masked Attention)
+    if mask is not None:
+        #mask为1的位置设为-inf,对应的softmax中的概率会变为0
+        scores = scores.masked_fill(mask == 0,1e-9)
+    #步骤4：Softmax归一化
+    attention_weights = F.softmax(scores,dim=-1)
+    #步骤5：如果有dropout 应用dropout
+    if drop_out is not None:
+        attention_weights =drop_out(attention_weights)
+    #步骤6：乘以V得到输出
+    # attentinon_weights:[batch_size,,n_heads,seq_len_q,seq_len_k]
+    # value:[batch_size,h_heads,seq_len_k,d_v]
+    # output:[batch_size,heads,seq_len_q,d_v]
+    output = torch.matmul(attention_weights,value)
+    return output
 
 def test_positional_encoding():
     """测试位置编码模块"""
@@ -171,6 +171,35 @@ def test_positional_encoding():
     
     return output
 
+def test_attention():
+    """测试注意力机制"""
+    print("\n" + "="*50)
+    print("🧪 测试缩放点积注意力")
+    print("="*50)
+    
+    batch_size = 2
+    n_heads = 4
+    seq_len = 6
+    d_k = 16
+    
+    # 创建Q, K, V
+    Q = torch.randn(batch_size, n_heads, seq_len, d_k)
+    K = torch.randn(batch_size, n_heads, seq_len, d_k)
+    V = torch.randn(batch_size, n_heads, seq_len, d_k)
+    
+    print(f"Q shape: {Q.shape}")
+    print(f"K shape: {K.shape}")
+    print(f"V shape: {V.shape}")
+    
+    # 计算注意力
+    output, weights = scaled_dot_product_attention(Q, K, V)
+    
+    print(f"输出 shape: {output.shape}")
+    print(f"注意力权重 shape: {weights.shape}")
+    print(f"注意力权重和: {weights[0, 0, 0].sum():.4f} (应该接近1.0)")
+    print(f"✅ 注意力机制测试通过！\n")
+    
+    return output, weights
 
 
 
@@ -196,4 +225,7 @@ def check_cuda_torch_info():
 if __name__ == '__main__':
     _ = test_positional_encoding()
     # 先激活环境，再运行python
+
+    # 运行测试
+    _ = test_attention()
 
