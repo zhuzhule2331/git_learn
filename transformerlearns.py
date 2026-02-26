@@ -94,7 +94,11 @@ class PositionalEncoding(nn.Module):
             -导致softmax后的梯度很小，训练困难
             -除以sqrt(d_k)可以解决这种问题
         参数：
-
+            quary:[batch_size,n_heads,seq_len,d_k] -查询矩阵
+            key:[batch_size,n_heads,seq_len,d_k]-键矩阵
+            value:[batch_size,n_heads,seq_len,d_k]- 值矩阵
+            mask:[batch_size,1,1,seq_len] or [batch_size,1,seq_len,seq_len] -掩码
+            drop_out:Drop_out层（可选）
         返回：
 
         数据流示例：
