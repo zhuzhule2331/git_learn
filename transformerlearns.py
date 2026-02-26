@@ -25,6 +25,10 @@ class PositionalEncoding(nn.Module):
         参数说明：
         d_model:模型的维度（例如512）
         max_len:支持的序列最大长度
+        在 Transformer 中，输入的张量形状通常是 [batch_size, seq_len, d_model]，其中：
+        batch_size：批次大小
+        seq_len：序列长度（每个样本的 token 数量）
+        d_model：每个 token 的特征维度（比如 512）
         """        
         super(PositionalEncoding,self).__init__()
         # 创建位置编码矩阵 shape[max_len,d_model]
@@ -47,7 +51,7 @@ class PositionalEncoding(nn.Module):
         #把一个张量（比如这里的 pe 位置编码矩阵）注册为模型的缓冲区（buffer） 
         # —— 它属于模型的一部分（会随模型移动到 GPU/CPU），但不会被优化器更新（非训练参数）
         print(f"✔️位置编码完成")
-        print(f"最大序列长度{max_len}")
+        print(f"最大序列长度对应于的seq_len单条序列中的样本数量{max_len}")
         print(f"模型维度{d_model}")
 
     def forward(self,x:torch.Tensor) -> torch.Tensor:
