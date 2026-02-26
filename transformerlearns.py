@@ -96,12 +96,28 @@ class PositionalEncoding(nn.Module):
         参数：
             quary:[batch_size,n_heads,seq_len,d_k] -查询矩阵
             key:[batch_size,n_heads,seq_len,d_k]-键矩阵
-            value:[batch_size,n_heads,seq_len,d_k]- 值矩阵
+            value:[batch_size,n_heads,seq_len,d_v]- 值矩阵
             mask:[batch_size,1,1,seq_len] or [batch_size,1,seq_len,seq_len] -掩码
             drop_out:Drop_out层（可选）
+                n_heads：注意力头的个数
+
         返回：
+        output:[batch_size,n_heads,seq_len,d_v]-注意力输出
+        attention_weights:[batch_size,n_heads,seq_len,seq_len]-注意力权重
 
         数据流示例：
+          1.机器翻译 
+            场景：我爱北京->I love Beijing.
+            quary:[32,8,10,64]#32个样本，8个头，10个词（token），每个词64维
+            key:[32,8,10,64]
+            value:[32,8,10,64]
+
+            步骤1：Q*K^T ->[32,8,10,10]  # 每个词对每个词的注意力分数(k^T是K的转置)
+                衡量每个 “查询（Q）” 和所有 “键（K）” 的匹配程度（分数越高，关联越强）
+                比如文本中：第 i 个词对第 j 个词的注意力分数
+            步骤2：缩放 ->[32,8,10,10]/sqret(64) = [32,8,10,10]/8
+            步骤3：softmax -> [32,8,10,10] # 归一化为概率
+            步骤4：乘以V->[32,8,10,10] # 加权求和得到输出
             
         """
 
