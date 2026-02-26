@@ -134,7 +134,7 @@ def scaled_dot_product_attention(
     #步骤3：如果有mask，应用mask（应用于masked Attention)
     if mask is not None:
         #mask为1的位置设为-inf,对应的softmax中的概率会变为0
-        scores = scores.masked_fill(mask == 0,1e-9)
+        scores = scores.masked_fill(mask == 0,-1e9)
     #步骤4：Softmax归一化
     attention_weights = F.softmax(scores,dim=-1)
     #步骤5：如果有dropout 应用dropout
@@ -145,7 +145,7 @@ def scaled_dot_product_attention(
     # value:[batch_size,h_heads,seq_len_k,d_v]
     # output:[batch_size,heads,seq_len_q,d_v]
     output = torch.matmul(attention_weights,value)
-    return output
+    return output,attention_weights
 
 def test_positional_encoding():
     """测试位置编码模块"""
@@ -196,6 +196,7 @@ def test_attention():
     
     print(f"输出 shape: {output.shape}")
     print(f"注意力权重 shape: {weights.shape}")
+    print(weights)
     print(f"注意力权重和: {weights[0, 0, 0].sum():.4f} (应该接近1.0)")
     print(f"✅ 注意力机制测试通过！\n")
     
