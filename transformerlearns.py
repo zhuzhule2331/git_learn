@@ -71,7 +71,7 @@ class PositionalEncoding(nn.Module):
         seq_len = x.size(1)
         
         #获取对应长度的位置编码并相加
-        #self.pe [:,:seq_len]的shape[1,seq_len,d_model]
+        #self.pe [:,:seq_len]会扩展到shape[1,seq_len,d_model]
         #广播机制会自动扩展到batch纬度
         output = x +self.pe[:,:seq_len]
 
@@ -202,9 +202,6 @@ def test_attention():
     
     return output, weights
 
-
-
-
 def check_cuda_torch_info():
     torch_version = torch.__version__
     print(f"(●'◡'●)🔍torch的版本:{torch_version}")
@@ -221,6 +218,152 @@ def check_cuda_torch_info():
         cuda_runtime_version = torch.backends.cudnn.version()
         print(f"cudnn的版本是{cuda_runtime_version}")
 
+class MultiHeadAttention(nn.Module):
+    """
+    多头注意力机制
+    核心思想：
+    -单个注意力可能只关注某一种关系
+    -多个注意力可能关注不同的关系
+    -最后将所有的头的输出拼接起来
+    使用场景
+    -文本：不同头关注语法，语义，长距离依赖等
+    -图像：不同头关注纹理，颜色，形状等
+    -多模态：不同头关注模态内和模态间的关系
+    """
+    def __init__(self,d_model:int,n_heads:int,dropout:float = 0.1):
+        """
+        参数
+        d_model:模型维度（必须能被n_heads整除）
+        n_head:注意力头数
+        dropout:Dropout概率"""
+        super(MultiHeadAttention,self).__init__()
+
+        assert d_model%n_heads==0,f"d_model({d_model})必须要被n_heads({n_heads})整除"
+        self.d_model=d_model
+        self.n_heads=n_heads
+        self.d_k=d_model//n_heads
+
+        #创建Q，K，V的线性变换层（这里使用nn.Linear,不用高级API）
+        #为什么是4个nn.Linear?
+        #三个用于生成Q，K，V
+        #剩下一个用于最后的映射输出
+        self.w_q = nn.Linear(d_model,d_model,bias=False) #shape[d_model,d_model]
+        self.w_k = nn.Linear(d_model,d_model,bias=False) #shape[d_model,d_model]
+        self.w_v = nn.Linear(d_model,d_model,bias=False) #shape[d_model,d_model]
+        self.w_o = nn.Linear(d_model,d_model,bias=False) #shape[d_model,d_model]
+
+        self.dropout =nn.Dropout(dropout)
+        #初始化权重
+        self._init_weights()
+
+        print("多头注意力机制初始化完成")
+        print(f"    模型维度{d_model}")
+        print(f"    注意力头数{n_heads}")
+        print(f"    每个头的维度{self.d_k}")
+
+    def _init_weights(self):
+            """Xavier初始化权重"""
+            for module in [self.w_q,self.w_k,self.w_v,self.w_o]:
+                nn.init.xavier_uniform_(module.weight)
+    
+    def forward(self,
+                query:torch.Tensor,
+                key:torch.Tensor,
+                value:torch.Tensor,
+                mask:Optional[torch.tensor]=None
+                )->Tuple[torch.Tensor,torch.Tensor]:
+        """前向传播
+        输入：
+            query:[batch_size,seq_len_q,d_model]
+            key:[batch_size,seq_len_k,d_model]
+            value:[batch_size,seq_len_v,d_model]
+            mask:[batch_size,1,1,seq_len] or None
+            
+        输出:
+            output:[batch_size,seq_len_q,d_model]
+            attention_weights[batch_size,seq_len_q,seq_len_k]
+        
+        数据流示例：
+        文本翻译“Hello,World!(2个词)"
+        Q，K，V[32,2,512] 32样本，2词，512维
+
+        步骤1：线性变换（伪代码）
+            Q = w_q*query -> [32,2,512]
+            K = w_k*key -> [32,2,512]
+            V = w_v*value ->[32,2,512]
+
+        步骤2：分头（reshape+transpose
+            Q->[32,2,512]->[32,2,8,64]->[32,8,2,64] #八个头，每个头64维
+            K->[32,2,512]->[32,2,8,64]->[32,8,2,64]
+            V->[32,2,512]->[32,2,8,64]->[32,8,2,64]
+        步骤3：计算注意力
+            每个头独立计算注意力  -> [32,8,2,64]
+        步骤4：拼接所有头
+            [32,8,2,64]->[32,2,8,64]->[32,2,512]
+        步骤5：最终线性变换（伪代码，实际使用self.w_o(output)Linear类中方法）
+            w_o * concat ->[32,2,512]
+            
+            """
+        batch_size=query.size(0)
+        seq_len_q =query.size(1)
+        #步骤1线性变换生成Q，K，V
+        #[batch_size,seq_len,d_model]->[batch_size,seq_len,d_model]
+        Q = self.w_q(query) # 假设为[32,10,512]
+        K = self.w_k(key)
+        V = self.w_v(value)
+
+        #步骤2：分头
+        #[batch_size,seq_len,d_model]->[batch_size,seq_len,n_heads,d_k]->[batch_size,n_heads,seq_len,d_k]
+        Q = Q.view(batch_size,-1,self.n_heads,self.d_k).transpose(1,2) 
+        K = K.view(batch_size,-1,self.n_heads,self.d_k).transpose(1,2)
+        V = V.view(batch_size,-1,self.n_heads,self.d_k).transpose(1,2)
+        # 现在shape变为[32,8,10,64]，-1是自动计算位数。
+
+        #步骤3：计算缩放点积注意力
+        #[batch_size,n_heads,seq_len_q,d_k]->[batch_size,n_heads,seq_len,d_k]
+        attention_output,attention_weights=scaled_dot_product_attention(Q,K,V,mask,self.dropout)
+        #output:[32,8,10,64]
+        #attention_weights[32,8,10,10]
+
+        #步骤4： 拼接多头输出
+        #[batch_size,n_heads,seq_len_q,d_k]->[batch_size,seq_len_q,n_heads,d_k]
+        # ->[batch_size,seq_len,d_model]
+        attention_output=attention_output.transpose(1,2).contiguous().view(batch_size,seq_len_q,self.d_model)
+        #现在[32,10,512]
+
+        #步骤5：最终的线性变换
+        output = self.w_o(attention_output)
+        #output[32,10,512]
+        return output,attention_weights
+    
+# 测试多头注意力
+def test_multihead_attention():
+    """测试多头注意力机制"""
+    print("\n" + "="*50)
+    print("🧪 测试多头注意力")
+    print("="*50)
+    
+    batch_size = 2
+    seq_len = 5
+    d_model = 256
+    n_heads = 8
+    
+    # 创建输入
+    x = torch.randn(batch_size, seq_len, d_model)
+    print(f"输入 shape: {x.shape}")
+    
+    # 创建多头注意力层
+    mha = MultiHeadAttention(d_model, n_heads)
+    
+    # 自注意力：Q=K=V
+    output, weights = mha(x, x, x)
+    
+    print(f"输出 shape: {output.shape}")
+    print(f"注意力权重 shape: {weights.shape}")
+    print(f"✅ 多头注意力测试通过！\n")
+    
+    return output, weights
+
 
 
 if __name__ == '__main__':
@@ -229,4 +372,5 @@ if __name__ == '__main__':
 
     # 运行测试
     _ = test_attention()
-
+    # 运行测试
+    _ = test_multihead_attention() 
