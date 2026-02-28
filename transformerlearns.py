@@ -440,7 +440,7 @@ class FeedForward(nn.Module):
 
 
 
-        pass
+        
 # 测试前馈网络
 def test_feedforward():
     """测试前馈神经网络"""
@@ -466,7 +466,71 @@ def test_feedforward():
     
     return output
 
+class LayerNorm(nn.modules):
+    """
+    层归一化：
+    为什么 LayerNorm 适合序列任务？
+    BatchNorm：对批次维度归一化（比如[batch, seq, dim]，对 batch 维度求均值），但序列任务中 seq_len 可变，batch 内样本分布不稳定；
+    LayerNorm：对每个样本的特征维度归一化（比如每个[seq, dim]的样本，对 dim 维度求均值），不依赖批次，更稳定。
+    -BatchNorm在序列任务中效果不好（系列长度可变）
+    -LayerNorm对每个样本独立进行归一化
+    -有助于稳定训练加速收敛
 
+    公式：y = γ *（x -μ）/σ +β
+
+     μ：均值
+     σ：方差
+     γ：可学习的缩放参数
+     β：可学习的偏移参数
+    """
+    def __init__(self,d_model:int,eps:float=1e-6):
+        """
+        参数说明：
+        d_model:特征维度
+        eps:防止除0的小数
+        """
+        super(LayerNorm,self).__init__()
+        self.d_model =d_model
+        self.eps = eps
+        self.gamma = nn.parameter(torch.ones(d_model))# 初始化γ参数为1
+        self.beta = nn.paramater(torch.zero(d_model))# 初始化β参数为0
+        
+        print(f"LayerNorm初始化完成！维度为{d_model}")
+
+
+    def forward(self,x : torch.Tensor) -> torch.Tensor:
+        """前向传播
+        输入：x[batch_size,seq_len,d_model]
+        输出：[batch_size,seq_len,d_model]
+        数据流示例：
+
+        输入：[32，100，512]
+
+        步骤1：计算均值和方差（在最后一个维度上）
+        mean:[32,100,1]
+        var:[32,100,1]
+        步骤2：归一化
+        x_norm =(x-mean)/sqrt(var+eps)
+        步骤3：缩放和偏移
+        output = γ * x_norm + β
+        
+
+        
+        """
+
+
+        # 计算均值和方差（在最后一个维度上）
+        mean = x.mean(dim=-1,keepdim=True)#[batch_size,seq_len,1]
+        var = x.var(dim=-1,keepdim=True)# [batch_size,seq_len,1]
+
+        #归一化
+        x_norm = (x-mean)/torch.sqrt(var+self.eps)
+        #缩放和偏移
+        output = x_norm * self.gamma +self.beta
+
+        return output
+        
+        pass
 
 
 if __name__ == '__main__':
