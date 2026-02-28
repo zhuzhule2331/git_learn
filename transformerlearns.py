@@ -530,7 +530,25 @@ class LayerNorm(nn.modules):
 
         return output
         
+
+class EncoderLayer(nn.Module):
+    """
+    Transformer编码器层
+    结构：
+    1.多投资注意力机制
+    2.Add & Norm (残差链接+层归一化)
+    3.前馈网络
+    4.Add & Norm (残差链接+层归一化)
+    使用场景：
+    -文本编码：BERT，GPT的编码器部分
+    -图像编码：VIT(vision Transformer)
+    -音频编码：音频特征提取
+    
+    """
+    def __init__(self):
+        super(EncoderLayer,self).__init__()
         pass
+
 
 
 if __name__ == '__main__':
