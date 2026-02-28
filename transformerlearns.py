@@ -364,6 +364,109 @@ def test_multihead_attention():
     
     return output, weights
 
+class FeedForward(nn.Module):
+    """
+    前馈神经网路 (Position-wise Feed Forward)
+
+    公式: FNN (x)=Max(0,x * w1+b1)*w2 +b2
+
+    特点：
+    -对每个位置进行独立的相同的操作
+    -包含两个线性变换和一个ReLU激活
+    -通常中间层的维度是模型维度的4倍
+    使用场景：
+    -增加模型的非线性表达能力
+    -在注意力机制后进一步表达特征
+    """
+    def __init__(self,d_model:int,d_ff:int =None,dropout:float =0.1):
+        """
+        参数说明：
+        d_model:模型维度
+        d_ff:前馈网络的中间层维度(默认为4*d_model)
+        dropout:Dropout概率"""
+        super(FeedForward,self).__init__()
+
+        # 如果没有指定d_ff,默认为d_model的4倍（transformer原文中的设定）
+        if d_ff is None:
+            d_ff = 4 * d_model
+        
+        self.d_model = d_model
+        self.d_ff = d_ff
+        # 两个线性层
+        self.linear1 =nn.Linear(d_model,d_ff) #[d_model,d_ff]
+        self.linear2 = nn.Linear(d_ff,d_model) #[d_ff,d_model]
+
+        #Dropout 层
+        self.dropout =nn.Dropout(dropout)
+        self.activation = nn.ReLU()
+        print("😂✔️✔️前馈神经网络初始化完成")
+        print(f"  模型维度{d_model}")
+        print(f"  中间层维度{d_ff}")
+
+        print()
+
+    def forward(self,x:torch.Tensor)->torch.Tensor:
+        """
+        前向传播
+        输入:
+        [batch_size,seq_len,d_model]
+        输出：
+        [batch_size,seq_len,d_model]
+        
+        数据流示例：
+            输入：[32,100,512] #32个样本，100个位置，512维
+            步骤1：第一个线性层
+            [32,100,512]->[32,100,2048] #扩展到4倍
+            步骤2：ReLU激活
+            [32,100,2048]->[32,100,2048]
+            步骤3：Dropout
+            [32,100,2048]->[32,100,2048]
+            步骤4：第二个线性层
+            [32,100,2048]->[32,100,512] #压缩回原始维度
+            步骤5：Dropout
+            [32,100,512]->[32,100,512]"""
+        # 第一个线性变换+激活函数
+        hidden=self.linear1(x) #[batch_size,seq_len,d_model]->[batch_size,seq_len,d_ff]
+        hidden=self.activation(hidden) #ReLU激活
+        hidden=self.dropout(hidden)  #Dropout
+        
+        # 第二个线性变换
+        output=self.linear2(hidden) # [batch_size,seq_len,d_ff]->[batch_size,seq_len,d_model]
+        output=self.dropout(output) # Dropout
+
+
+        return output
+
+
+
+
+        pass
+# 测试前馈网络
+def test_feedforward():
+    """测试前馈神经网络"""
+    print("\n" + "="*50)
+    print("🧪 测试前馈网络")
+    print("="*50)
+    
+    batch_size = 2
+    seq_len = 10
+    d_model = 512
+    
+    # 创建输入
+    x = torch.randn(batch_size, seq_len, d_model)
+    print(f"输入 shape: {x.shape}")
+    
+    # 创建前馈网络
+    ff = FeedForward(d_model)
+    
+    # 前向传播
+    output = ff(x)
+    print(f"输出 shape: {output.shape}")
+    print(f"✅ 前馈网络测试通过！\n")
+    
+    return output
+
+
 
 
 if __name__ == '__main__':
@@ -374,3 +477,5 @@ if __name__ == '__main__':
     _ = test_attention()
     # 运行测试
     _ = test_multihead_attention() 
+    # 运行测试
+    _ = test_feedforward()
