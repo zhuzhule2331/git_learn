@@ -595,6 +595,25 @@ class EncoderLayer(nn.Module):
         
         
         """
+        # 子层1：自注意力
+        # 保存残差
+        residual = x
+        # 自注意力（Q=K=V都是x）
+        # 因为编码器使用自注意力，Q/K/V 必须来自同一个输入序列 x，目的是让序列内部各位置互相关注。
+        attn_output,_ = self.self_attention(x,x,x,mask)
+        #Dropout
+        attn_output = self.dropout(attn_output)
+        #残差连接+LayerNorm
+        x = self.norm1(attn_output+residual)
+        # 子层2：前馈神经网络
+        # 保存残差
+        residual = x
+        # 前馈网络
+        ff_output = self.feed_forward(x)
+        # 残差连接+LayerNorm
+        x = self.norm2(ff_output+residual)
+        return x
+    
         pass
 
 
