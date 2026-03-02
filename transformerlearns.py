@@ -709,6 +709,62 @@ class DecoderLayer(nn.Module):
         # 残差连接+LayerNorm
         x = self.norm3(residual+ff_output)
         return x
+    
+
+
+class TransfomerEncoder(nn.Module):
+    """完整的Transformer编码器:
+       包含   1.词嵌入层
+              2.位置编码
+              3.N个编码器层的堆叠
+
+        使用场景：
+              1.BERT：双向语言理解
+              2.文本分类：将文本编码为特征向量
+              3.特征提取：提取图片/文本的高级特征
+
+    """
+    def __init__(self, vocab_size:int,
+                 d_model:int=512
+                 ,n_heads:int=8,n_layers:int = 6
+                 ,d_ff:int=2048,
+                 max_len:int=5000,
+                 dropout:float = 0.1):
+        super().__init__()
+        """
+        vocab_size：词汇表大小
+        d_model:模型维度
+        n_heads:注意力头数
+        n_layers:编码器层数
+        d_ff:前馈神经网络维度
+        max_len:模型最大维度
+        dropout:Dropout概率
+
+        """    
+        self.d_model =d_model
+        self.n_layers = n_layers
+        # 词嵌入层（将词ID转化为向量）
+        self.embedding = nn.Embedding(vocab_size,d_model)
+        # 位置编码
+        self.positional_encoding = PositionalEncoding(d_model,max_len)
+        #堆叠N个编码器层
+        self.layers = nn.ModuleList([
+            EncoderLayer(d_model,n_heads,d_ff,dropout) for _ in range(n_layers)
+        ])
+        # Dropout层
+        self.dropout = nn.Dropout(dropout)
+        # 初始化词嵌入层权重
+        self._init_embeddings()
+
+        print(f"✔️Transformer编码器初始化完成！")
+        print(f"  词汇表大小{vocab_size}")
+        print(f"  编码器层数{n_layers}")
+        print(f"  模型维度{d_model}")
+
+    def _init_embbedings(self):
+        """初始化词嵌入层权重"""
+        # 使用正态分布初始化
+        nn.init.normal_(self.embedding.weight,mean=0,std=self.d_model**-0.5)
         pass
 
 
