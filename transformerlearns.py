@@ -366,7 +366,7 @@ def test_multihead_attention():
 
 class FeedForward(nn.Module):
     """
-    前馈神经网路 (Position-wise Feed Forward)
+    前馈神经网络 (Position-wise Feed Forward)
 
     公式: FNN (x)=Max(0,x * w1+b1)*w2 +b2
 
@@ -545,8 +545,56 @@ class EncoderLayer(nn.Module):
     -音频编码：音频特征提取
 
     """
-    def __init__(self):
+    def __init__(self,d_model:int,n_heads:int,d_ff:int = None,dropout:float =0.1):
+        """参数说明：
+           d_model:模型维度
+           n_heads:注意力头数
+           d_ff:前馈网络中间层维度
+           dropout:Dropout概率
+        
+        """
         super(EncoderLayer,self).__init__()
+
+        # 多头自注意力机制
+        self.self_attention= MultiHeadAttention(d_model,n_heads,dropout)
+
+        #前馈网络
+        self.feed_forward = FeedForward(d_model,d_ff,dropout)
+
+        # 两个LayerNorm层
+        self.norm1 = LayerNorm(d_model)
+        self.norm2 = LayerNorm(d_model)
+
+        # Dropout
+        self.dropout = nn.Dropout(dropout)
+
+        print(f'✔️编码器初始化完成！')
+
+    def forward(self,x:torch.Tensor,mask:Optional[torch.Tensor] = None)->torch.Tensor:
+        """前向传播
+            输入：
+            x:[batch_size,seq_len,d_model] -输入序列
+            mask:[batch_size,1,1,seq_len] -注意力掩码（可选）
+            输出：
+            [batch_size,seq_len,d_model]-编码后的序列
+            数据流示例（文本编码）：
+            输入句子：“我爱北京天安门”（七个字）
+            x:[32，7，512]#32个样本，7个字，512维
+            步骤1：自注意力
+            attn_output :[32,7,512]
+            步骤2：残差连接+LayerNorm
+            x=Layernorm(x+attn_output)
+            步骤3：前馈网络
+            ff_output：[32,7,512]
+            步骤4：残差连接 +LayerNorm
+            x = LayerNorm(x+ff_output)
+
+            输出:[32,7,512]
+
+
+        
+        
+        """
         pass
 
 
