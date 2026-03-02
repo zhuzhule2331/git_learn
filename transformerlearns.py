@@ -614,6 +614,38 @@ class EncoderLayer(nn.Module):
         x = self.norm2(ff_output+residual)
         return x
     
+
+class DecoderLayer(nn.Module):
+    """Transformer解码器层：
+       结构：
+       1.mask多头自注意力机制（防止看到未来信息）
+       2.Add & Norm
+       3.编码器解码器交叉注意力机制
+       4.Add & Norm
+       5.前馈网络
+       6.Add & Norm
+
+       使用场景：
+       -机器翻译：将源语言翻译为目标语言
+       -文本生成：GPT系列
+       -图像描述：根据图像生成对应描述    
+    """
+    def __init__(self,d_model:int,n_heads:int,d_ff:int,dropout:float = 0.1):
+        """
+        参数说明
+        d_model:模型维度
+        n_head:注意力头数
+        d_ff:前馈网络中间层维度
+        dropout：Dropout概率"""
+
+        super(DecoderLayer,self).__init__()
+        # Mask自注意力（用于目标序列）
+        self.mask_self_attention = MultiHeadAttention(d_model,n_heads,dropout)
+        # 交叉注意力（用于关注编码器输出）
+        self.cross_attention = MultiHeadAttention(d_model,n_heads,dropout)
+        #前馈网络
+        self.feed_forward = FeedForward(d_model,d_ff,dropout)
+        #定义三个Layernormal层
         pass
 
 
