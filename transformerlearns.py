@@ -646,6 +646,69 @@ class DecoderLayer(nn.Module):
         #前馈网络
         self.feed_forward = FeedForward(d_model,d_ff,dropout)
         #定义三个Layernormal层
+        self.norm1 = LayerNorm(d_model)
+        self.norm2 = LayerNorm(d_model)
+        self.norm3 = LayerNorm(d_model)
+
+        # Dropout层
+        self.dropout =nn.Dropout(dropout)
+
+        print(f"解码器层初始化完成")
+
+    def forward(self,x:torch.Tensor,encoder_output:torch.Tensor,src_mask:Optional[torch.Tensor]=None,
+                tgt_mask:Optional[torch.Tendor]=None)->torch.Tensor:
+        """
+        前向传播：
+        输入：
+         x[batch_size,tgt_len,d_model] - 目标序列
+         encoder_output：[batch_size,src_len,d_model] - 编码器输出
+         src_mask:[batch_size,1,1,src_len]- 源序列掩码
+         tgt_mask:[batch_size,1,tgt_len,tgt_len]- 目标序列掩码
+        
+        输出：
+          [batch_size,tgt_len,d_model]-解码后的序列
+        数据流示例（中英翻译）：
+         源句子：“我爱北京”（编码器已处理）
+         目标翻译：“I Love Beijing”（正在生成）
+         x ：[32,3,512] # “I Love Beijing
+         encoder_output:[32,4,512] # "我爱北京“的编码
+        步骤1：masked的自注意力（只能看到已经生成的词）
+            生成Beijing时，只能看到I love
+        步骤2：交叉注意力（关注原句子）
+            决定“Beijing”应对应“北京”
+        步骤3：前馈神经网络
+            进一步处理特征
+
+        
+        """
+        # 子层1：masked自注意力
+        residual =x 
+        # masked的自注意力
+        mask_attn_output = self.mask_self_attention(x,x,x,tgt_mask)
+        mask_attn_output = self.dropout(mask_attn_output)
+
+        # 参数连接 +LayerNorm
+        x = self.norm1(residual + mask_attn_output)
+
+        # 子层2：交叉自注意力机制
+        residual = x
+        # 交叉子注意力机制，Q来自解码器，K，V来自编码器
+        cross_attn_output = self.cross_attention(x#Q来自解码器
+                                                 ,encoder_output#K来自编码器
+                                                 ,encoder_output#V来自编码器
+                                                 ,src_mask)
+        cross_attn_output = self.dropout(cross_attn_output)
+        # 残差连接+LayerNorm
+        x = self.norm2(x+cross_attn_output)
+
+        # 子层3： 前馈神经网络
+        residual = x
+
+        ff_output = self.feed_forward(x)
+        #ff_output = self.dropout(ff_output)
+        # 残差连接+LayerNorm
+        x = self.norm3(residual+ff_output)
+        return x
         pass
 
 
