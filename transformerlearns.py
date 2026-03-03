@@ -466,7 +466,7 @@ def test_feedforward():
     
     return output
 
-class LayerNorm(nn.modules):
+class LayerNorm(nn.Module):
     """
     层归一化：
     为什么 LayerNorm 适合序列任务？
@@ -492,8 +492,8 @@ class LayerNorm(nn.modules):
         super(LayerNorm,self).__init__()
         self.d_model =d_model
         self.eps = eps
-        self.gamma = nn.parameter(torch.ones(d_model))# 初始化γ参数为1
-        self.beta = nn.paramater(torch.zero(d_model))# 初始化β参数为0
+        self.gamma = nn.Parameter(torch.ones(d_model))# 初始化γ参数为1
+        self.beta = nn.Parameter(torch.zeros(d_model))# 初始化β参数为0
         
         print(f"LayerNorm初始化完成！维度为{d_model}")
 
@@ -656,7 +656,7 @@ class DecoderLayer(nn.Module):
         print(f"解码器层初始化完成")
 
     def forward(self,x:torch.Tensor,encoder_output:torch.Tensor,src_mask:Optional[torch.Tensor]=None,
-                tgt_mask:Optional[torch.Tendor]=None)->torch.Tensor:
+                tgt_mask:Optional[torch.Tensor]=None)->torch.Tensor:
         """
         前向传播：
         输入：
@@ -712,7 +712,7 @@ class DecoderLayer(nn.Module):
     
 
 
-class TransfomerEncoder(nn.Module):
+class TransformerEncoder(nn.Module):
     """完整的Transformer编码器:
        包含   1.词嵌入层
               2.位置编码
@@ -761,11 +761,97 @@ class TransfomerEncoder(nn.Module):
         print(f"  编码器层数{n_layers}")
         print(f"  模型维度{d_model}")
 
-    def _init_embbedings(self):
+    def _init_embeddings(self):
         """初始化词嵌入层权重"""
         # 使用正态分布初始化
         nn.init.normal_(self.embedding.weight,mean=0,std=self.d_model**-0.5)
+    
+    def forward(self,
+               src:torch.Tensor,
+               src_mask:Optional[torch.Tensor] = None)->torch.Tensor:
+        """
+               前向传播
+               输入：
+               src:[batch_size,src_len]-源序列的词Id
+               src_mask [batch_size,1,1,src_len]-源序列掩码
+               输出：
+               [batch_size,seq_len,d_model]-编码后的序列
+               数据流示例（文本编码）：
+               输入句子Id：[101,2023,456,102]#4个词的ID
+               src:[32,4]# 32个样本，4个词
+               步骤1：词嵌入
+               [32,4] -> [32,4,512]
+               步骤2：缩放（为了和位置编码平衡）
+                [32,4,512] *sqrt(512)
+               步骤3：位置编码
+                [32,4,512] + 位置编码
+               步骤4：通过6个编码器层
+                [32,4,512] ->[32,4,512]
+                [32,4,512] ->[32,4,512]
+                 ...
+                [32,4,512] ->[32,4,512]
+                [32,4,512] ->[32,4,512]
+                输出：[32,4,512]
+               
+
+
+        """
+         #获取序列长度和批次大小
+        batch_size,seq_len =src.shape
+        # 步骤1：词嵌入
+        x = self.embedding(src)#[batch_size,seq_len,d_model]
+        # 步骤2：缩放嵌入（transformer中的技巧）
+        x = x*math.sqrt(self.d_model)
+        # 步骤3：添加位置编码
+        x = self.positional_encoding(x)
+        #Dropout
+        x = self.dropout(x)
+
+        # 步骤4：通过N个编码器层
+        for i,layer in enumerate(self.layers):
+            x = layer(x,src_mask)
+            print(f"第{i+1}层编码器输出shape{x.shape}")
+
+        
+        return x
+
+
         pass
+
+# 测试完整编码器
+def test_encoder():
+    """测试Transformer编码器"""
+    print("\n" + "="*50)
+    print("🧪 测试Transformer编码器")
+    print("="*50)
+    
+    # 参数设置
+    vocab_size = 10000
+    batch_size = 2
+    seq_len = 10
+    d_model = 512
+    n_heads = 8
+    n_layers = 6
+    
+    # 创建编码器
+    encoder = TransformerEncoder(
+        vocab_size=vocab_size,
+        d_model=d_model,
+        n_heads=n_heads,
+        n_layers=n_layers
+    )
+    
+    # 创建输入（随机的词ID）
+    src = torch.randint(0, vocab_size, (batch_size, seq_len))
+    print(f"输入shape: {src.shape}")
+    
+    # 前向传播
+    output = encoder(src)
+    print(f"输出shape: {output.shape}")
+    print(f"✅ 编码器测试通过！\n")
+    
+    return output
+
 
 
 
@@ -779,3 +865,5 @@ if __name__ == '__main__':
     _ = test_multihead_attention() 
     # 运行测试
     _ = test_feedforward()
+    # 运行测试
+    _ = test_encoder()
