@@ -815,6 +815,20 @@ class TransformerEncoder(nn.Module):
         
         return x
 
+class TransformerDecoder(nn.Module):
+    """
+    完整的transformer解码器
+      包含：
+      -词嵌入层
+      -位置编码
+      -N个解码器层的堆叠
+      -输出层（词汇表概率）
+      使用场景
+      机器翻译：生成目标语言
+      文本生成：GPT系列
+      序列到序列任务：摘要生成，对话系统
+    """
+    def __init__():
 
         pass
 
