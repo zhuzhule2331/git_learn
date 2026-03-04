@@ -684,7 +684,7 @@ class DecoderLayer(nn.Module):
         # 子层1：masked自注意力
         residual =x 
         # masked的自注意力
-        mask_attn_output = self.mask_self_attention(x,x,x,tgt_mask)
+        mask_attn_output , _ = self.mask_self_attention(x,x,x,tgt_mask)
         mask_attn_output = self.dropout(mask_attn_output)
 
         # 参数连接 +LayerNorm
@@ -693,7 +693,7 @@ class DecoderLayer(nn.Module):
         # 子层2：交叉自注意力机制
         residual = x
         # 交叉子注意力机制，Q来自解码器，K，V来自编码器
-        cross_attn_output = self.cross_attention(x#Q来自解码器
+        cross_attn_output,_ = self.cross_attention(x#Q来自解码器
                                                  ,encoder_output#K来自编码器
                                                  ,encoder_output#V来自编码器
                                                  ,src_mask)
@@ -828,9 +828,156 @@ class TransformerDecoder(nn.Module):
       文本生成：GPT系列
       序列到序列任务：摘要生成，对话系统
     """
-    def __init__():
+    def __init__(self,
+                 vocab_size:int,
+                 d_model:int= 512,
+                 n_heads:int = 8,
+                 n_layers:int=6,
+                 d_ff:int = 2048,
+                 max_len:int = 5000,
+                 dropout:float = 0.1):
+        """
+        参数说明：
+        vocab_size:词汇表大小
+        d_model:模型维度
+        n_heads:注意力头数
+        n_layers：解码器层层数
+        d_ff：前馈网络维度
+        max_len:最大序列长度
+        dropout：Dropout概率
+        """
+        super(TransformerDecoder,self).__init__()
+        self.d_model =d_model
+        self.n_heads =n_heads
+        # 词嵌入层
+        self.embedding = nn.Embedding(vocab_size,d_model)
+        # 位置编码
+        self.positionalenconding = PositionalEncoding(d_model,max_len)
+        # 添加N个解码器层
+        self.layers  = nn.ModuleList([
+            DecoderLayer(d_model,n_heads,d_ff,dropout) for _ in range(n_layers)
+        ])
+        
+        # 输出层，将d_modle维映射到vocab_size（预测下一个词）
+        self.output_projection = nn.Linear(d_model,vocab_size)
+    
+        #Dropout
+        self.dropout = nn.Dropout(dropout)
 
-        pass
+        #初始化权重
+        self._init_weights()
+
+         
+        print(f"✔️解码器初始化完成")
+        print(f"  词汇表大小{vocab_size}")
+        print(f"  解码器层数{n_layers}")
+        print(f"  模型维度{d_model}")
+
+
+    def _init_weights(self):
+        """初始化权重"""
+        nn.init.normal_(self.embedding.weight,mean= 0 ,std= self.d_model **-0.5 )
+        nn.init.xavier_uniform_(self.output_projection.weight)
+    
+    def forward(self,
+                tgt:torch.Tensor,
+                encoder_output:torch.Tensor,
+                src_mask:Optional[torch.Tensor] = None,
+                tgt_mask:Optional[torch.Tensor] = None
+                )->torch.Tensor:
+        """ 前向传播
+        输入：
+        tgt:[batch_size,tgt_len] -目标序列的词ID
+        encoder_output:[batch_size,src_len,d_model] -编码器输出
+        src_mask:[batch_size,1,1,src_len] - 源序列掩码
+        tgt_mask:[batch_size,1,tgt_len,tgt_len] - 目标序列掩码
+
+        输出：
+        [batch_size,tgt_len,vocab_size] -每个位置的词汇表概率
+        数据流示例：文本翻译任务
+        原序列：“我爱北京”（已编码）
+        目标序列：“I Love Beijing”
+        tgt :[32,3] #32个样本，3个词
+        encoder_output:[32,4,512] # 编码器输出
+        步骤1：词嵌入+位置编码
+         [32,3] ->[32,3,512]
+        步骤2：通过六个解码器层
+          每个解码器层都会关注编码器输出
+        步骤3：输出投影
+          [32,3,512]->[32,3,vocab_size]
+          得到每个位置的词汇表概率
+
+        """
+        # 获取目标序列的长度
+        batch_size,tgt_len = tgt.shape
+        # 步骤1：词嵌入
+        x = self.embedding(tgt) #[batch_size,tgt_len,d_model]
+        # 步骤2：缩放嵌入
+        x = x * math.sqrt(self.d_model)
+        # 步骤3：位置编码
+        x = self.positionalenconding(x) #[batch_size,tgt_len,d_model]
+        # Dropout 
+        x = self.dropout(x)
+        # 步骤4：通过N个解码器层
+        for i,layer in enumerate(self.layers):
+            x = layer(x,encoder_output,src_mask,tgt_mask)
+            print(f"第{i}词解码后的形状为{x.shape}")
+        # 步骤5：输出投影（预测词汇表概率）
+        output = self.output_projection(x)# [batch_size,tgt_len,vocab_size]
+
+        return output
+    
+
+def test_transformer_decoder():
+    """测试TransformerDecoder的完整性和输出维度"""
+    # 1. 配置测试参数（简化版，方便验证）
+    vocab_size = 1000  # 词汇表大小
+    d_model = 128      # 模型维度（缩小，加快测试）
+    n_heads = 4        # 注意力头数（128/4=32，符合要求）
+    n_layers = 2       # 解码器层数（简化）
+    d_ff = 512         # 前馈网络维度
+    batch_size = 2     # 批次大小
+    src_len = 5        # 源序列长度（比如输入5个词）
+    tgt_len = 3        # 目标序列长度（比如输出3个词）
+    
+    # 2. 初始化解码器
+    decoder = TransformerDecoder(
+        vocab_size=vocab_size,
+        d_model=d_model,
+        n_heads=n_heads,
+        n_layers=n_layers,
+        d_ff=d_ff
+    )
+    
+    # 3. 构造测试输入
+    tgt = torch.randint(0, vocab_size, (batch_size, tgt_len))  # 目标序列词ID [2, 3]
+    encoder_output = torch.randn(batch_size, src_len, d_model)  # 编码器输出 [2, 5, 128]
+    src_mask = None  # 简化测试，暂不使用掩码
+    tgt_mask = None  # 简化测试，暂不使用掩码
+    
+    # 4. 前向传播
+    with torch.no_grad():  # 禁用梯度，加快测试
+        output = decoder(tgt, encoder_output, src_mask, tgt_mask)
+    
+    # 5. 验证输出维度
+    print("\n===== 测试结果 =====")
+    print(f"输入目标序列形状: {tgt.shape}")
+    print(f"编码器输出形状: {encoder_output.shape}")
+    print(f"解码器输出形状: {output.shape}")
+    
+    # 断言验证（核心维度检查）
+    assert output.shape == (batch_size, tgt_len, vocab_size), \
+        f"输出维度错误！预期 {(batch_size, tgt_len, vocab_size)}，实际 {output.shape}"
+    print("✅ 维度验证通过！")
+    
+    # 6. 额外验证：权重初始化和前向传播无报错
+    print("✅ 解码器前向传播无报错！")
+    print("✅ 测试全部通过！")
+
+
+
+        
+      
 
 # 测试完整编码器
 def test_encoder():
@@ -870,14 +1017,15 @@ def test_encoder():
 
 
 if __name__ == '__main__':
-    _ = test_positional_encoding()
-    # 先激活环境，再运行python
+    # _ = test_positional_encoding()
+    # # 先激活环境，再运行python
 
-    # 运行测试
-    _ = test_attention()
-    # 运行测试
-    _ = test_multihead_attention() 
-    # 运行测试
-    _ = test_feedforward()
-    # 运行测试
-    _ = test_encoder()
+    # # 运行测试
+    # _ = test_attention()
+    # # 运行测试
+    # _ = test_multihead_attention() 
+    # # 运行测试
+    # _ = test_feedforward()
+    # # 运行测试
+    # _ = test_encoder()
+    _ = test_transformer_decoder()
