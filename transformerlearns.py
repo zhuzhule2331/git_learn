@@ -336,33 +336,6 @@ class MultiHeadAttention(nn.Module):
         #output[32,10,512]
         return output,attention_weights
     
-# 测试多头注意力
-def test_multihead_attention():
-    """测试多头注意力机制"""
-    print("\n" + "="*50)
-    print("🧪 测试多头注意力")
-    print("="*50)
-    
-    batch_size = 2
-    seq_len = 5
-    d_model = 256
-    n_heads = 8
-    
-    # 创建输入
-    x = torch.randn(batch_size, seq_len, d_model)
-    print(f"输入 shape: {x.shape}")
-    
-    # 创建多头注意力层
-    mha = MultiHeadAttention(d_model, n_heads)
-    
-    # 自注意力：Q=K=V
-    output, weights = mha(x, x, x)
-    
-    print(f"输出 shape: {output.shape}")
-    print(f"注意力权重 shape: {weights.shape}")
-    print(f"✅ 多头注意力测试通过！\n")
-    
-    return output, weights
 
 class FeedForward(nn.Module):
     """
@@ -436,35 +409,7 @@ class FeedForward(nn.Module):
 
 
         return output
-
-
-
-
-        
-# 测试前馈网络
-def test_feedforward():
-    """测试前馈神经网络"""
-    print("\n" + "="*50)
-    print("🧪 测试前馈网络")
-    print("="*50)
-    
-    batch_size = 2
-    seq_len = 10
-    d_model = 512
-    
-    # 创建输入
-    x = torch.randn(batch_size, seq_len, d_model)
-    print(f"输入 shape: {x.shape}")
-    
-    # 创建前馈网络
-    ff = FeedForward(d_model)
-    
-    # 前向传播
-    output = ff(x)
-    print(f"输出 shape: {output.shape}")
-    print(f"✅ 前馈网络测试通过！\n")
-    
-    return output
+      
 
 class LayerNorm(nn.Module):
     """
@@ -710,8 +655,6 @@ class DecoderLayer(nn.Module):
         x = self.norm3(residual+ff_output)
         return x
     
-
-
 class TransformerEncoder(nn.Module):
     """完整的Transformer编码器:
        包含   1.词嵌入层
@@ -926,8 +869,98 @@ class TransformerDecoder(nn.Module):
         output = self.output_projection(x)# [batch_size,tgt_len,vocab_size]
 
         return output
-    
 
+
+
+# 测试前馈网络
+def test_feedforward():
+    """测试前馈神经网络"""
+    print("\n" + "="*50)
+    print("🧪 测试前馈网络")
+    print("="*50)
+    
+    batch_size = 2
+    seq_len = 10
+    d_model = 512
+    
+    # 创建输入
+    x = torch.randn(batch_size, seq_len, d_model)
+    print(f"输入 shape: {x.shape}")
+    
+    # 创建前馈网络
+    ff = FeedForward(d_model)
+    
+    # 前向传播
+    output = ff(x)
+    print(f"输出 shape: {output.shape}")
+    print(f"✅ 前馈网络测试通过！\n")
+    
+    return output
+
+# 测试多头注意力
+def test_multihead_attention():
+    """测试多头注意力机制"""
+    print("\n" + "="*50)
+    print("🧪 测试多头注意力")
+    print("="*50)
+    
+    batch_size = 2
+    seq_len = 5
+    d_model = 256
+    n_heads = 8
+    
+    # 创建输入
+    x = torch.randn(batch_size, seq_len, d_model)
+    print(f"输入 shape: {x.shape}")
+    
+    # 创建多头注意力层
+    mha = MultiHeadAttention(d_model, n_heads)
+    
+    # 自注意力：Q=K=V
+    output, weights = mha(x, x, x)
+    
+    print(f"输出 shape: {output.shape}")
+    print(f"注意力权重 shape: {weights.shape}")
+    print(f"✅ 多头注意力测试通过！\n")
+    
+    return output, weights
+
+
+# 测试完整编码器
+def test_encoder():
+    """测试Transformer编码器"""
+    print("\n" + "="*50)
+    print("🧪 测试Transformer编码器")
+    print("="*50)
+    
+    # 参数设置
+    vocab_size = 10000
+    batch_size = 2
+    seq_len = 10
+    d_model = 512
+    n_heads = 8
+    n_layers = 6
+    
+    # 创建编码器
+    encoder = TransformerEncoder(
+        vocab_size=vocab_size,
+        d_model=d_model,
+        n_heads=n_heads,
+        n_layers=n_layers
+    )
+    
+    # 创建输入（随机的词ID）
+    src = torch.randint(0, vocab_size, (batch_size, seq_len))
+    print(f"输入shape: {src.shape}")
+    
+    # 前向传播
+    output = encoder(src)
+    print(f"输出shape: {output.shape}")
+    print(f"✅ 编码器测试通过！\n")
+    
+    return output
+
+# 测试完整解码器
 def test_transformer_decoder():
     """测试TransformerDecoder的完整性和输出维度"""
     # 1. 配置测试参数（简化版，方便验证）
@@ -973,46 +1006,6 @@ def test_transformer_decoder():
     # 6. 额外验证：权重初始化和前向传播无报错
     print("✅ 解码器前向传播无报错！")
     print("✅ 测试全部通过！")
-
-
-
-        
-      
-
-# 测试完整编码器
-def test_encoder():
-    """测试Transformer编码器"""
-    print("\n" + "="*50)
-    print("🧪 测试Transformer编码器")
-    print("="*50)
-    
-    # 参数设置
-    vocab_size = 10000
-    batch_size = 2
-    seq_len = 10
-    d_model = 512
-    n_heads = 8
-    n_layers = 6
-    
-    # 创建编码器
-    encoder = TransformerEncoder(
-        vocab_size=vocab_size,
-        d_model=d_model,
-        n_heads=n_heads,
-        n_layers=n_layers
-    )
-    
-    # 创建输入（随机的词ID）
-    src = torch.randint(0, vocab_size, (batch_size, seq_len))
-    print(f"输入shape: {src.shape}")
-    
-    # 前向传播
-    output = encoder(src)
-    print(f"输出shape: {output.shape}")
-    print(f"✅ 编码器测试通过！\n")
-    
-    return output
-
 
 
 
