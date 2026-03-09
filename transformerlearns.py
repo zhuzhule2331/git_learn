@@ -1007,7 +1007,51 @@ def test_transformer_decoder():
     print("✅ 解码器前向传播无报错！")
     print("✅ 测试全部通过！")
 
+class Transformer(nn.Module):
+    """
+    完整的transformer模型
+    结合了解码器和编码器，实现了序列到序列的转换
+    使用场景：
+    -机械翻译：将一种语言转换为另一种语言
+    -文本摘要：将长文本压缩成短摘要
+    -对话系统：根据上下文形成回复
+    -代码生成：根据代码生成描述"""
+    def __init__(self, 
+                 src_vocab_size:int,
+                 tgt_vocab_size:int,
+                 d_model:int = 512,
+                 n_heads:int = 8,
+                 n_encoder_layers:int = 6,
+                 n_decoder_layers:int = 6,
+                 d_ff:int = 2048,
+                 max_len:int = 5000,
+                 dropout:float = 0.1
+                 ):
+        """
+        参数说明：
+        -src_vocab_size:源语言词汇表大小
+        -tgt_vocab_size:目标语言词汇表大小
+        -d_model:模型维度
+        -n_heads:注意力头数
+        -n_encoder_layers:编码器层数
+        -n_encoder_layers:解码器层数
+        -d_ff:前馈神经网络维度
+        -max_len:最大序列长度
+        -dropout:Dropout概率
+        """
+        super().__init__()
+        #编码器
+        self.encoder = TransformerEncoder(src_vocab_size,d_model,n_heads,n_encoder_layers,d_ff,max_len,dropout)
+        #解码器
+        self.decoder =TransformerDecoder(tgt_vocab_size,d_model,n_heads,n_decoder_layers,d_ff,max_len,dropout)
 
+        print(f"Transformer初始化完成")
+        print(f"  模型维度：{d_model}")
+        print(f"  源语言词汇表大小{src_vocab_size}")
+        print(f"  目标语言词汇表大小{tgt_vocab_size}")
+        print(f"  解码器层数{n_encoder_layers}")
+        print(f"  编码器层数{n_decoder_layers}")
+    pass
 
 if __name__ == '__main__':
     # _ = test_positional_encoding()
