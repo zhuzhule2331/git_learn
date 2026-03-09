@@ -637,10 +637,10 @@ class DecoderLayer(nn.Module):
 
         # 子层2：交叉自注意力机制
         residual = x
-        # 交叉子注意力机制，Q来自解码器，K，V来自编码器
-        cross_attn_output,_ = self.cross_attention(x#Q来自解码器
-                                                 ,encoder_output#K来自编码器
-                                                 ,encoder_output#V来自编码器
+        # 交叉自注意力机制，Q来自解码器，K，V来自编码器
+        cross_attn_output,_ = self.cross_attention(x             #Q来自解码器
+                                                 ,encoder_output #K来自编码器
+                                                 ,encoder_output #V来自编码器
                                                  ,src_mask)
         cross_attn_output = self.dropout(cross_attn_output)
         # 残差连接+LayerNorm
@@ -1051,7 +1051,151 @@ class Transformer(nn.Module):
         print(f"  目标语言词汇表大小{tgt_vocab_size}")
         print(f"  解码器层数{n_encoder_layers}")
         print(f"  编码器层数{n_decoder_layers}")
-    pass
+
+    def forward(self,
+                src:torch.Tensor,
+                tgt:torch.Tensor,
+                src_mask:Optional[torch.Tensor] = None,
+                tgt_mask :Optional[torch.Tensor] = None) ->torch.Tensor:
+        """
+        前向传播
+
+        输入：
+        src:[batch_size,src_len]-源序列
+        tgt:[batch_size,tgt_len]-目标序列
+        src_mask:[batch_size,1,1,src_len] -源序列掩码
+        tgt_mask:[batch_size,1,tgt_len,tgt_len] -目标区序列掩码
+        输出：
+        [batch_size,tgt_len,vocab_size]-预测的词汇表概率
+        完整翻译数据流示例（中英翻译）
+          我爱北京天安门 -> “I Love Beijing Tiananmen”
+          输入：
+          src[32,7] #我爱天安门的ID
+          tgt[32,4] #I Love Beijing Tiananmen的ID
+
+          步骤1：编译器处理源序列
+          [32,7]->[32,7,512]
+          步骤2：解码器生成目标序列
+          解码器输入：[32，4]
+          编码器输出：[32，7，512]
+          -> [32,5,vocab_size]
+          输出：
+          每个位置预测的词的概率分布
+                  """
+        #编码源序列
+        encoder_output = self.encoder(src,src_mask)
+        #解码生成目标序列
+        decoder_output = self.decoder(tgt,encoder_output,src_mask,tgt_mask)
+
+        return decoder_output
+    
+    @torch.no_grad()
+    def generate(self,
+                 src:torch.Tensor,
+                 max_len:int = 1000,
+                 start_token:int =2, #<SOS> token
+                 end_token:int = 3 #<EOS> token
+                 )->torch.Tensor:
+        """
+        生成序列（推理时使用）
+        src[batch_size,src_len]-源序列
+        max_len - 最大生成长度
+        start_token:开始token的ID
+        end_token:结束token的ID
+        输出：
+        [batch_size,generated_len] -生成的序列
+
+
+        参数说明
+        
+        """
+        self.eval()
+        batch_size = src.size(0)
+        device =src.device
+        #编码源序列
+        encoder_output = self.encoder(src,None)
+        #初始化目标序列（以<SOS>开始）
+        tgt=torch.full((batch_size,1),start_token,device=device)
+
+        for _ in range(max_len):
+            #创建掩码矩阵
+            tgt_mask = self.create_tgt_mask(tgt.size(1)).to(device)
+            #解码
+            output = self.decoder(tgt,encoder_output,None,tgt_mask)
+            #获取最后一个位置的预测
+            #因为解码器是自回归生成（一步一步拼序列），每次只需要生成 “当前序列的下一个 token”，而最后一个位置的预测结果，正好对应 “下一个要生成的 token”。
+
+            next_token = output[:,-1,:].argmax(dim = -1,keepdim =True)
+            #拼接到目标序列
+            tgt = torch.cat([tgt,next_token],dim = 1)
+            #检查是否所有样本都生成了<EOS>
+            if(next_token == end_token).all():
+                break
+        return tgt
+
+    @staticmethod
+    def create_tgt_mask(tgt_len:int)->torch.Tensor:
+        """
+        创建tgt虚列的掩码矩阵（下三角矩阵），
+        防止解码器看到未来信息
+        让解码器在训练时模拟推理场景，只能看到 “已生成的内容”，不能看 “未来的内容”，避免模型作弊；
+        示例：tgt_len = 4
+        mask =[[1,0,0,0]
+               [1,1,0,0]
+               [1,1,1,0]
+               [1,1,1,1]]
+        """      
+        
+        mask =torch.tril(torch.ones(tgt_len,tgt_len))
+        return mask.unsqueeze(0).unsqueeze(0)
+        pass
+# 测试完整Transformer
+def test_transformer():
+    """测试完整的Transformer模型"""
+    print("\n" + "="*50)
+    print("🧪 测试完整Transformer模型")
+    print("="*50)
+    
+    # 参数设置
+    src_vocab_size = 10000
+    tgt_vocab_size = 8000
+    batch_size = 2
+    src_len = 10
+    tgt_len = 12
+    
+    # 创建模型
+    model = Transformer(
+        src_vocab_size=src_vocab_size,
+        tgt_vocab_size=tgt_vocab_size,
+        d_model=512,
+        n_heads=8,
+        n_encoder_layers=6,
+        n_decoder_layers=6
+    )
+    
+    # 创建输入
+    src = torch.randint(0, src_vocab_size, (batch_size, src_len))
+    tgt = torch.randint(0, tgt_vocab_size, (batch_size, tgt_len))
+    
+    print(f"源序列shape: {src.shape}")
+    print(f"目标序列shape: {tgt.shape}")
+    
+    # 创建掩码
+    tgt_mask = Transformer.create_tgt_mask(tgt_len)
+    
+    # 前向传播
+    output = model(src, tgt, tgt_mask=tgt_mask)
+    print(f"输出shape: {output.shape}")
+    print(f"✅ Transformer测试通过！\n")
+    
+    # 测试生成
+    print("测试生成功能...")
+    generated = model.generate(src, max_len=20)
+    print(f"生成序列shape: {generated.shape}")
+    print(f"✅ 生成测试通过！\n")
+    
+    return output
+
 
 if __name__ == '__main__':
     # _ = test_positional_encoding()
@@ -1066,3 +1210,5 @@ if __name__ == '__main__':
     # # 运行测试
     # _ = test_encoder()
     _ = test_transformer_decoder()
+    # 运行测试
+    _ = test_transformer()
