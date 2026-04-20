@@ -1,0 +1,17 @@
+import torch
+# print(torch.__version__)
+# print(torch.cuda.is_available())
+# print(torch.cuda.get_device_name(0))
+import numpy as np
+a = torch.tensor([1,2.,3])
+print(a)
+b =torch.zeros(3)
+print(b)
+c = torch.ones([3,1])
+print(c)
+d = torch.rand([3,3])
+print(d)
+np_a = np.array([4,5.,6])
+print(np_a)
+torch_a = torch.from_numpy(np_a).float()
+print(torch_a, torch_a.dtype)
