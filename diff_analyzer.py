@@ -341,15 +341,15 @@ def write_log(results, output_path, source_desc):
             )
 
         file_obj.write('\n【异常帧检测】\n')
-        anomaly_threshold_ssim = 0.85
-        anomaly_threshold_edge = 15
+        anomaly_threshold_ssim = max(0.75, float(np.mean(frame_to_frame_ssim) - 3 * np.std(frame_to_frame_ssim)))
+        anomaly_threshold_edge = max(5.0, float(np.mean(frame_to_frame_edge) + 3 * np.std(frame_to_frame_edge)))
         anomalies = []
         for result in results:
             if result['frame_to_frame']['ssim'] < anomaly_threshold_ssim:
                 anomalies.append((result['current_file'], f"帧间SSIM过低: {result['frame_to_frame']['ssim']}"))
             if result['frame_to_frame']['edge_diff_percent'] > anomaly_threshold_edge:
                 anomalies.append((result['current_file'], f"帧间边缘差异过大: {result['frame_to_frame']['edge_diff_percent']}%"))
-            if result['frame_to_ref']['ssim'] < 0.7:
+            if result['frame_to_ref']['ssim'] < max(0.65, float(np.mean(frame_to_ref_ssim) - 3 * np.std(frame_to_ref_ssim))):
                 anomalies.append((result['current_file'], f"累积漂移严重: SSIM={result['frame_to_ref']['ssim']}"))
 
         if anomalies:
@@ -363,7 +363,10 @@ def write_log(results, output_path, source_desc):
         avg_ssim = np.mean(frame_to_frame_ssim)
         avg_edge = np.mean(frame_to_frame_edge)
         if avg_ssim < 0.95:
-            file_obj.write('1. 帧间SSIM偏低(<0.95)，建议检查曝光、增益、白平衡和光照稳定性\n')
+            if ssim_std < 0.01 and edge_std < 5:
+                file_obj.write('1. 序列稳定但绝对SSIM偏低，优先检查镜头对焦、场景细节变化、白平衡一致性和曝光偏差\n')
+            else:
+                file_obj.write('1. 帧间SSIM偏低(<0.95)，建议检查曝光、增益、白平衡、光照稳定性和机械振动\n')
         if avg_edge > 10:
             file_obj.write('2. 帧间边缘差异较大(>10%)，建议检查锐化、光源频闪和机械振动\n')
         if np.std(frame_to_frame_ssim) > 0.03:
@@ -480,19 +483,17 @@ def apply_stable_camera_params(camera, args):
         if ret != 0:
             raise RuntimeError(f'设置 Gain 失败, ret=0x{to_hex_str(ret)}')
 
-    desired_frame_rate = args.frame_rate
-    if desired_frame_rate is None:
-        frame_rate_info, ret = read_float_feature(camera, 'AcquisitionFrameRate')
-        if ret == 0 and frame_rate_info and frame_rate_info['max'] > 0:
-            desired_frame_rate = frame_rate_info['max']
-
-    if desired_frame_rate is not None:
+    if args.frame_rate is not None:
         ret = camera.MV_CC_SetBoolValue('AcquisitionFrameRateEnable', True)
         if ret != 0:
             print(f'警告: 开启帧率控制失败 ret=0x{to_hex_str(ret)}')
-        ret = camera.MV_CC_SetFloatValue('AcquisitionFrameRate', float(desired_frame_rate))
+        ret = camera.MV_CC_SetFloatValue('AcquisitionFrameRate', float(args.frame_rate))
         if ret != 0:
-            print(f'警告: 设置 AcquisitionFrameRate={desired_frame_rate} 失败 ret=0x{to_hex_str(ret)}')
+            print(f'警告: 设置 AcquisitionFrameRate={args.frame_rate} 失败 ret=0x{to_hex_str(ret)}')
+    else:
+        ret = camera.MV_CC_SetBoolValue('AcquisitionFrameRateEnable', False)
+        if ret != 0:
+            print(f'警告: 关闭帧率控制失败 ret=0x{to_hex_str(ret)}')
 
     if args.enable_trigger:
         ret = camera.MV_CC_SetEnumValue('TriggerMode', 1)
